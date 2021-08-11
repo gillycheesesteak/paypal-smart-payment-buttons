@@ -1,20 +1,23 @@
 /* @flow */
 
+import { FPTI_KEY } from '@paypal/sdk-constants/src';
 import { ZalgoPromise } from 'zalgo-promise/src';
 import { request } from 'belter/src';
 
 import { GRAPHQL_URI } from '../config';
-import { HEADERS, SMART_PAYMENT_BUTTONS } from '../constants';
+import { FPTI_CUSTOM_KEY, FPTI_TRANSITION, HEADERS, SMART_PAYMENT_BUTTONS, STATUS_CODES } from '../constants';
+import { getLogger } from '../lib';
 
 type RESTAPIParams<D> = {|
     accessToken : string,
     method? : string,
     url : string,
     data? : D,
-    headers? : { [string] : string }
+    headers? : { [string] : string },
+    eventName : string
 |};
 
-export function callRestAPI<D, T>({ accessToken, method, url, data, headers } : RESTAPIParams<D>) : ZalgoPromise<T> {
+export function callRestAPI<D, T>({ accessToken, method, url, data, headers, eventName } : RESTAPIParams<D>) : ZalgoPromise<T> {
 
     if (!accessToken) {
         throw new Error(`No access token passed to ${ url }`);
@@ -39,6 +42,15 @@ export function callRestAPI<D, T>({ accessToken, method, url, data, headers } : 
             // $FlowFixMe
             error.response = { status, headers: responseHeaders, body };
 
+            if (status === STATUS_CODES.TOO_MANY_REQUESTS) {
+                getLogger().track({
+                    [FPTI_KEY.TRANSITION]:      FPTI_TRANSITION.CALL_REST_API,
+                    [FPTI_CUSTOM_KEY.ERR_DESC]: `Error: ${ status } - ${ body }`,
+                    [FPTI_CUSTOM_KEY.INFO_MSG]: `URL: ${ url }`
+                });
+            }
+
+            getLogger().warn(`rest_api_${ eventName }_error`);
             throw error;
         }
 
@@ -52,7 +64,8 @@ type SmartAPIRequest = {|
     url : string,
     method? : string,
     json? : $ReadOnlyArray<mixed> | Object,
-    headers? : { [string] : string }
+    headers? : { [string] : string },
+    eventName : string
 |};
 
 export type APIResponse = {|
@@ -60,7 +73,7 @@ export type APIResponse = {|
     headers : {| [$Values<typeof HEADERS>] : string |}
 |};
 
-export function callSmartAPI({ accessToken, url, method = 'get', headers: reqHeaders = {}, json, authenticated = true } : SmartAPIRequest) : ZalgoPromise<APIResponse> {
+export function callSmartAPI({ accessToken, url, method = 'get', headers: reqHeaders = {}, json, authenticated = true, eventName } : SmartAPIRequest) : ZalgoPromise<APIResponse> {
 
     reqHeaders[HEADERS.REQUESTED_BY] = SMART_PAYMENT_BUTTONS;
 
@@ -80,14 +93,26 @@ export function callSmartAPI({ accessToken, url, method = 'get', headers: reqHea
                 err.response = { url, method, headers: reqHeaders, body };
                 // $FlowFixMe
                 err.data = body.data;
+
+                getLogger().warn(`smart_api_${ eventName }_contingency_error`);
                 throw err;
             }
 
+            if (status === STATUS_CODES.TOO_MANY_REQUESTS) {
+                getLogger().track({
+                    [FPTI_KEY.TRANSITION]:      FPTI_TRANSITION.CALL_REST_API,
+                    [FPTI_CUSTOM_KEY.ERR_DESC]: `Error: ${ status } - ${ body }`,
+                    [FPTI_CUSTOM_KEY.INFO_MSG]: `URL: ${ url }`
+                });
+            }
+
             if (status > 400) {
+                getLogger().warn(`smart_api_${ eventName }_status_${ status }_error`);
                 throw new Error(`Api: ${ url } returned status code: ${ status } (Corr ID: ${ headers[HEADERS.PAYPAL_DEBUG_ID] })\n\n${ JSON.stringify(body) }`);
             }
 
             if (body.ack !== 'success') {
+                getLogger().warn(`smart_api_${ eventName }_ack_error`);
                 throw new Error(`Api: ${ url } returned ack: ${ body.ack } (Corr ID: ${ headers[HEADERS.PAYPAL_DEBUG_ID] })\n\n${ JSON.stringify(body) }`);
             }
 
@@ -112,10 +137,13 @@ export function callGraphQL<T>({ name, query, variables = {}, headers = {} } : {
 
         if (errors.length) {
             const message = errors[0].message || JSON.stringify(errors[0]);
+
+            getLogger().warn(`graphql_${ name }_error`, { err: message });
             throw new Error(message);
         }
 
         if (status !== 200) {
+            getLogger().warn(`graphql_${ name }_status_${ status }_error`);
             throw new Error(`${ GRAPHQL_URI } returned status ${ status }\n\n${ JSON.stringify(body) }`);
         }
 

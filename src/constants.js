@@ -130,7 +130,6 @@ export const FPTI_TRANSITION = {
     NATIVE_DETECT_WEB_SWITCH:               ('native_detect_web_switch' : 'native_detect_web_switch'),
     NATIVE_APP_SWITCH_ACK:                  ('native_app_switch_ack' : 'native_app_switch_ack'),
     NATIVE_ERROR:                           ('native_app_switch_ack' : 'native_app_switch_ack'),
-    NATIVE_SET_PROPS_ATTEMPT:               ('process_set_props_attempt' : 'process_set_props_attempt'),
     NATIVE_APP_INSTALLED:                   ('native_app_installed' : 'native_app_installed'),
     NATIVE_APP_SWITCH_INELIGIBLE:           ('app_switch_ineligible' : 'app_switch_ineligible'),
     NATIVE_ATTEMPT_APP_SWITCH:              ('app_switch_attempted' : 'app_switch_attempted'),
@@ -162,7 +161,9 @@ export const FPTI_TRANSITION = {
     QR_SHOWN:                               ('qr_shown' : 'qr_shown'),
     QR_CLOSING:                             ('qr_closing' : 'qr_closing'),
     
-    HONEY_IDENTIFY:                         ('honey_identify' : 'honey_identify')
+    HONEY_IDENTIFY:                         ('honey_identify' : 'honey_identify'),
+    
+    CALL_REST_API:                          ('call_rest_api' : 'call_rest_api')
 };
 
 export const FPTI_MENU_OPTION = {
@@ -252,4 +253,8 @@ export const ITEM_CATEGORY = {
 
 export const BUTTON_LABEL = {
     DONATE: 'donate'
+};
+
+export const STATUS_CODES = {
+    TOO_MANY_REQUESTS: 429
 };
